@@ -140,8 +140,171 @@ class ImageOffset:
         
         return (result,)
 
+class RGBtoRYGCBM:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "image": ("IMAGE",),
+            "threshold": ("FLOAT", {
+                "default": 0.5,
+                "min": 0.0,
+                "max": 1.0,
+                "step": 0.01
+            }),
+        }}
+    
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "convert"
+    CATEGORY = "custom_node_experiments"
+
+    def convert(self, image, threshold):
+        # Получаем размеры входного изображения [batch, height, width, channels]
+        batch, height, width, channels = image.shape
+        
+        # Проверяем, что у нас RGB изображение
+        if channels != 3:
+            raise ValueError("Input image must be RGB (3 channels)")
+        
+        # Создаем выходной тензор для 6 каналов
+        result = torch.zeros((batch, height, width, 6), device=image.device, dtype=image.dtype)
+        
+        # Получаем RGB каналы и применяем порог к ним
+        R = torch.where(image[..., 0] > threshold, image[..., 0], torch.zeros_like(image[..., 0]))
+        G = torch.where(image[..., 1] > threshold, image[..., 1], torch.zeros_like(image[..., 1]))
+        B = torch.where(image[..., 2] > threshold, image[..., 2], torch.zeros_like(image[..., 2]))
+        
+        # Заполняем каналы RYGCBM
+        # R - Красный (оставляем как есть)
+        result[..., 0] = R
+        
+        # Y - Желтый (среднее красного и зеленого)
+        result[..., 1] = (R + G) / 2
+        
+        # G - Зеленый (оставляем как есть)
+        result[..., 2] = G
+        
+        # C - Голубой (среднее синего и зеленого)
+        result[..., 3] = (G + B) / 2
+        
+        # B - Синий (оставляем как есть)
+        result[..., 4] = B
+        
+        # M - Пурпурный (среднее красного и синего)
+        result[..., 5] = (R + B) / 2
+        
+        return (result,)
+
+class RYGCBMtoRGB:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "image": ("IMAGE",),
+            "blend_mode": (["average", "maximum", "minimum"],),
+            "normalize": ("BOOLEAN", {"default": True}),
+        }}
+    
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "convert"
+    CATEGORY = "custom_node_experiments"
+
+    def convert(self, image, blend_mode, normalize):
+        # Получаем размеры входного изображения [batch, height, width, channels]
+        batch, height, width, channels = image.shape
+        
+        # Проверяем, что у нас RYGCBM изображение
+        if channels != 6:
+            raise ValueError("Input image must be RYGCBM (6 channels)")
+        
+        # Создаем выходной тензор для RGB
+        result = torch.zeros((batch, height, width, 3), device=image.device, dtype=image.dtype)
+        
+        # Получаем RYGCBM каналы
+        R = image[..., 0]  # Красный
+        Y = image[..., 1]  # Желтый
+        G = image[..., 2]  # Зеленый
+        C = image[..., 3]  # Голубой
+        B = image[..., 4]  # Синий
+        M = image[..., 5]  # Пурпурный
+        
+        # Вычисляем RGB на основе выбранного метода смешивания
+        if blend_mode == "average":
+            # R участвует в R, Y, M
+            result[..., 0] = (R + Y/2 + M/2) / 2
+            # G участвует в Y, G, C
+            result[..., 1] = (Y/2 + G + C/2) / 2
+            # B участвует в C, B, M
+            result[..., 2] = (C/2 + B + M/2) / 2
+        elif blend_mode == "maximum":
+            # Для каждого канала берем максимум из участвующих цветов
+            result[..., 0] = torch.maximum(R, torch.maximum(Y/2, M/2))  # R
+            result[..., 1] = torch.maximum(G, torch.maximum(Y/2, C/2))  # G
+            result[..., 2] = torch.maximum(B, torch.maximum(C/2, M/2))  # B
+        else:  # minimum
+            # Для каждого канала берем минимум из участвующих цветов
+            result[..., 0] = torch.minimum(R, torch.minimum(Y/2, M/2))  # R
+            result[..., 1] = torch.minimum(G, torch.minimum(Y/2, C/2))  # G
+            result[..., 2] = torch.minimum(B, torch.minimum(C/2, M/2))  # B
+        
+        # Нормализация результата
+        if normalize:
+            # Находим максимальное значение для каждого пикселя по всем каналам
+            max_vals = torch.maximum(result[..., 0], 
+                                   torch.maximum(result[..., 1], 
+                                               result[..., 2]))
+            # Избегаем деления на ноль
+            max_vals = torch.maximum(max_vals, torch.tensor(1e-8, device=max_vals.device))
+            # Нормализуем каждый канал
+            result[..., 0] = result[..., 0] / max_vals
+            result[..., 1] = result[..., 1] / max_vals
+            result[..., 2] = result[..., 2] / max_vals
+        
+        return (result,)
+
+class ExtractImageChannel:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "image": ("IMAGE",),
+            "channel": ("INT", {
+                "default": 0,
+                "min": 0,
+                "max": 64,  # Достаточно большое значение для поддержки разных форматов
+                "step": 1
+            }),
+            "output_mode": (["single_channel", "rgb_repeated"],),
+        }}
+    
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "extract"
+    CATEGORY = "custom_node_experiments"
+
+    def extract(self, image, channel, output_mode):
+        # Получаем размеры входного изображения [batch, height, width, channels]
+        batch, height, width, channels = image.shape
+        
+        # Проверяем, что запрошенный канал существует
+        if channel >= channels:
+            raise ValueError(f"Channel {channel} does not exist. Image has {channels} channels.")
+        
+        # Извлекаем нужный канал
+        selected_channel = image[..., channel]
+        
+        if output_mode == "single_channel":
+            # Возвращаем один канал, сохраняя размерность
+            return (selected_channel.unsqueeze(-1),)
+        else:  # rgb_repeated
+            # Создаем RGB изображение, повторяя выбранный канал три раза
+            result = torch.zeros((batch, height, width, 3), device=image.device, dtype=image.dtype)
+            result[..., 0] = selected_channel  # R
+            result[..., 1] = selected_channel  # G
+            result[..., 2] = selected_channel  # B
+            return (result,)
+
 NODE_CLASS_MAPPINGS = {
     "ImageScaleToTotalPixelsRound64": ImageScaleToTotalPixelsRound64,
     "ImageBlendLighter": ImageBlendLighter,
     "ImageOffset": ImageOffset,
+    "RGBtoRYGCBM": RGBtoRYGCBM,
+    "RYGCBMtoRGB": RYGCBMtoRGB,
+    "ExtractImageChannel": ExtractImageChannel,
 }
