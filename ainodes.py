@@ -63,17 +63,23 @@ class ImageBlendLighter:
                                 image6, image7, image8, image9] if img is not None]
         
         # Получаем размеры первого изображения как целевые
-        target_height, target_width = images[0].shape[:2]
+        batch, target_height, target_width, channels = images[0].shape
         
         # Масштабируем все изображения к размеру первого
         scaled_images = []
         for img in images:
-            if img.shape[:2] != (target_height, target_width):
-                img = torch.nn.functional.interpolate(
-                    img.movedim(-1, 1),
+            if img.shape[1:3] != (target_height, target_width):
+                # Переставляем размерности для интерполяции [batch, channels, height, width]
+                img_channels_first = img.movedim(-1, 1)
+                # Масштабируем
+                img_resized = F.interpolate(
+                    img_channels_first,
                     size=(target_height, target_width),
-                    mode='bilinear'
-                ).movedim(1, -1)
+                    mode='bilinear',
+                    align_corners=False
+                )
+                # Возвращаем размерности в исходный порядок [batch, height, width, channels]
+                img = img_resized.movedim(1, -1)
             scaled_images.append(img)
         
         # Применяем метод Lighter последовательно ко всем изображениям
@@ -87,7 +93,55 @@ class ImageBlendLighter:
         
         return (result,)
 
+class ImageOffset:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "image": ("IMAGE",),
+            "offset_x": ("INT", {
+                "default": 0, 
+                "min": -4096,
+                "max": 4096,
+                "step": 1
+            }),
+            "offset_y": ("INT", {
+                "default": 0,
+                "min": -4096,
+                "max": 4096,
+                "step": 1
+            }),
+        }}
+    
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "offset"
+    CATEGORY = "custom_node_experiments"
+
+    def offset(self, image, offset_x, offset_y):
+        # Получаем размеры изображения [batch, height, width, channels]
+        batch, height, width, channels = image.shape
+        
+        # Создаем новый тензор, заполненный нулями (черный цвет)
+        result = torch.zeros_like(image)
+        
+        # Определяем границы копирования для источника и назначения
+        src_start_y = max(0, -offset_y)
+        src_end_y = min(height, height - offset_y)
+        src_start_x = max(0, -offset_x)
+        src_end_x = min(width, width - offset_x)
+        
+        dst_start_y = max(0, offset_y)
+        dst_end_y = min(height, height + offset_y)
+        dst_start_x = max(0, offset_x)
+        dst_end_x = min(width, width + offset_x)
+        
+        # Копируем часть изображения с учетом смещения для всего батча
+        result[:, dst_start_y:dst_end_y, dst_start_x:dst_end_x, :] = \
+            image[:, src_start_y:src_end_y, src_start_x:src_end_x, :]
+        
+        return (result,)
+
 NODE_CLASS_MAPPINGS = {
     "ImageScaleToTotalPixelsRound64": ImageScaleToTotalPixelsRound64,
     "ImageBlendLighter": ImageBlendLighter,
+    "ImageOffset": ImageOffset,
 }
