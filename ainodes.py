@@ -173,24 +173,23 @@ class RGBtoRYGCBM:
         G = torch.where(image[..., 1] > threshold, image[..., 1], torch.zeros_like(image[..., 1]))
         B = torch.where(image[..., 2] > threshold, image[..., 2], torch.zeros_like(image[..., 2]))
         
+        # Вычисляем смешанные цвета
+        Y = torch.minimum(R, G)  # Желтый (минимум из R и G)
+        C = torch.minimum(G, B)  # Голубой (минимум из G и B)
+        M = torch.minimum(R, B)  # Пурпурный (минимум из R и B)
+        
+        # Усиливаем основные цвета в 2 раза и вычитаем половину смешанных
+        R = torch.maximum(R*2 - Y/2 - M/2, torch.zeros_like(R))  # Усиливаем R и убираем половину Y и M
+        G = torch.maximum(G*2 - Y/2 - C/2, torch.zeros_like(G))  # Усиливаем G и убираем половину Y и C
+        B = torch.maximum(B*2 - C/2 - M/2, torch.zeros_like(B))  # Усиливаем B и убираем половину C и M
+        
         # Заполняем каналы RYGCBM
-        # R - Красный (оставляем как есть)
-        result[..., 0] = R
-        
-        # Y - Желтый (среднее красного и зеленого)
-        result[..., 1] = (R + G) / 2
-        
-        # G - Зеленый (оставляем как есть)
-        result[..., 2] = G
-        
-        # C - Голубой (среднее синего и зеленого)
-        result[..., 3] = (G + B) / 2
-        
-        # B - Синий (оставляем как есть)
-        result[..., 4] = B
-        
-        # M - Пурпурный (среднее красного и синего)
-        result[..., 5] = (R + B) / 2
+        result[..., 0] = R  # Красный (усиленный)
+        result[..., 1] = Y  # Желтый
+        result[..., 2] = G  # Зеленый (усиленный)
+        result[..., 3] = C  # Голубой
+        result[..., 4] = B  # Синий (усиленный)
+        result[..., 5] = M  # Пурпурный
         
         return (result,)
 
