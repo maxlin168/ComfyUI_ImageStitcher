@@ -720,6 +720,33 @@ class ImageCropBorders:
             return (image[:, 0:0, 0:0, :],)
         result = image[:, top:bottom, left:right, :]
         return (result,)
+        
+class ImageScaleToQwen:
+    upscale_methods = [ "bilinear", "nearest-exact", "area", "bicubic", "lanczos"]
+    crop_methods = ["disabled", "center"]
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": { "image": ("IMAGE",), "upscale_method": (s.upscale_methods,),
+                            "total_m": ("INT", {"default": 1024, "min": 16, "max": 40900006}),
+                            }}
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "upscale"
+
+    CATEGORY = "custom_node_experiments"
+
+    def upscale(self, image, upscale_method, total_m):
+        samples = image.movedim(-1,1)
+        total = int(total_m * total_m)
+        scale_by = math.sqrt(total / (samples.shape[3] * samples.shape[2]))
+        width = round(samples.shape[3] * scale_by / 16.0) * 16
+        height = round(samples.shape[2] * scale_by / 16.0) * 16
+        
+        print("upscale to ",width, height)
+
+        s = comfy.utils.common_upscale(samples, width, height, upscale_method, "disabled")
+        s = s.movedim(1,-1)
+        return (s,)
 
 NODE_CLASS_MAPPINGS = {
     "ImageScaleToTotalPixelsRound64": ImageScaleToTotalPixelsRound64,
@@ -736,4 +763,5 @@ NODE_CLASS_MAPPINGS = {
     "ImageMirrorPad": ImageMirrorPad,
     "ImageCropBorders": ImageCropBorders,
     "ImageStitcher": ImageStitcher,
+    "ImageScaleToQwen":ImageScaleToQwen,
 }
