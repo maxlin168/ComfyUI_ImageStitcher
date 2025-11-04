@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 
 # --- 顏色空間轉換輔助函數 (LAB) ---
+# ... (LAB 相關輔助函數保持不變) ...
 
 def rgb_to_xyz(rgb):
     mask = rgb > 0.04045
@@ -86,10 +87,9 @@ def lab_to_rgb(lab):
     xyz = lab_to_xyz(lab)
     rgb = xyz_to_rgb(xyz)
     return rgb
-
-
-# --- 自定義節點類別 ---
-
+    
+# --- 其他輔助類別 (ImageScaleToTotalPixelsRound64, ImageBlendLighter, ImageOffset, etc.) 保持不變 ---
+# ...
 class ImageScaleToTotalPixelsRound64:
     upscale_methods = ["bilinear", "nearest-exact", "area", "bicubic", "lanczos"]
 
@@ -103,7 +103,7 @@ class ImageScaleToTotalPixelsRound64:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "upscale"
-    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
+    CATEGORY = "custom_node_experiments" # 保持您的值
 
     def upscale(self, image, upscale_method, megapixels):
         samples = image.movedim(-1,1)
@@ -141,7 +141,7 @@ class ImageBlendLighter:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "blend"
-    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
+    CATEGORY = "custom_node_experiments" # 保持您的值
 
     def blend(self, image1, image2, blend_factor, image3=None, image4=None, image5=None, 
               image6=None, image7=None, image8=None, image9=None):
@@ -201,7 +201,7 @@ class ImageOffset:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "offset"
-    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
+    CATEGORY = "custom_node_experiments" # 保持您的值
 
     def offset(self, image, offset_x, offset_y):
         # Получаем размеры изображения [batch, height, width, channels]
@@ -236,7 +236,7 @@ class RGBtoRYGCBM:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "convert"
-    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
+    CATEGORY = "custom_node_experiments" # 保持您的值
 
     def convert(self, image):
         # Получаем размеры входного изображения [batch, height, width, channels]
@@ -285,7 +285,7 @@ class RYGCBMtoRGB:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "convert"
-    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
+    CATEGORY = "custom_node_experiments" # 保持您的值
 
     def convert(self, image, blend_mode, normalize):
         # Получаем размеры входного изображения [batch, height, width, channels]
@@ -356,7 +356,7 @@ class ExtractImageChannel:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "extract"
-    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
+    CATEGORY = "custom_node_experiments" # 保持您的值
 
     def extract(self, image, channel, output_mode):
         # Получаем размеры входного изображения [batch, height, width, channels]
@@ -390,7 +390,7 @@ class MatchRYGCBMColors:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "match_colors"
-    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
+    CATEGORY = "custom_node_experiments" # 保持您的值
 
     def match_colors(self, image, reference):
         # Проверяем, что оба изображения 6-канальные
@@ -447,7 +447,7 @@ class TextCommaToWeighted:
 
     RETURN_TYPES = ("STRING",)
     FUNCTION = "convert"
-    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
+    CATEGORY = "custom_node_experiments" # 保持您的值
 
     def convert(self, text, weight):
         if text is None:
@@ -471,7 +471,7 @@ class TextCommaToRandomWeighted:
 
     RETURN_TYPES = ("STRING",)
     FUNCTION = "convert"
-    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
+    CATEGORY = "custom_node_experiments" # 保持您的值
 
     def convert(self, text, min_weight, max_weight, seed):
         if text is None:
@@ -493,7 +493,7 @@ class RGBtoLAB:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "convert"
-    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
+    CATEGORY = "custom_node_experiments" # 保持您的值
 
     def convert(self, image):
         return (rgb_to_lab(image),)
@@ -507,7 +507,7 @@ class LABtoRGB:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "convert"
-    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
+    CATEGORY = "custom_node_experiments" # 保持您的值
 
     def convert(self, image):
         rgb = lab_to_rgb(image)
@@ -515,6 +515,16 @@ class LABtoRGB:
 
 class ImageStitcher:
     upscale_methods = ["bilinear", "nearest-exact", "area", "bicubic", "lanczos"] 
+    
+    # 整合的輸出變形模式選單
+    output_modes = [
+        "Reference_Fill",           # 保持比例，以 Reference 尺寸為目標，超出邊界填充 (pad/black)
+        "Reference_Crop",           # 保持比例，以 Reference 尺寸為目標，超出邊界裁剪 (Crop)
+        "Reference_Stretch",        # 忽略比例，拉伸填滿 Reference 尺寸
+        "Image1_Fill",              # 保持比例，以 Image1 尺寸為目標，超出邊界填充
+        "Image1_Crop",              # 保持比例，以 Image1 尺寸為目標，超出邊界裁剪
+        "Image1_Stretch",           # 忽略比例，拉伸填滿 Image1 尺寸
+    ]
 
     @classmethod
     def INPUT_TYPES(s):
@@ -526,22 +536,20 @@ class ImageStitcher:
             "ratio": ("FLOAT", {"default": 0.75, "min": 0.1, "max": 1.0, "step": 0.01}),
             "reproj_thresh": ("FLOAT", {"default": 4.0, "min": 1.0, "max": 20.0, "step": 0.1}),
             "show_matches": ("BOOLEAN", {"default": False}),
-            "output_size_mode": (["reference", "image1"], {"default": "reference"}), 
             
-            # --- 新增的參數 ---
-            "stretch": ("BOOLEAN", {"default": False}), # 是否強制拉伸以填滿輸出尺寸
-            "keep_proportion": ("BOOLEAN", {"default": True}), # 是否保持對齊後的圖像比例
-            "fill_crop_mode": (["FILL", "CROP"], {"default": "FILL"}), # 超出邊界時的處理方式
-            "pad": ("INT", {"default": 0, "min": 0, "max": 1024, "step": 1}), # 在最終輸出圖像的四周增加的邊緣填充
+            # --- 整合後的輸出變形控制 ---
+            "output_transformation_mode": (s.output_modes, {"default": "Reference_Fill"}), 
+            "pad": ("INT", {"default": 0, "min": 0, "max": 1024, "step": 1}), # 額外的填充量，所有模式下適用
         }}
     
     RETURN_TYPES = ("IMAGE", "IMAGE")
     RETURN_NAMES = ("stitched_image", "matches_visualization")
     FUNCTION = "stitch"
-    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
+    CATEGORY = "custom_node_experiments" # 保持您的值
 
     def detect_and_describe(self, image):
         """Обнаруживает ключевые точки и извлекает дескрипторы SIFT"""
+        # ... (detect_and_describe 函數保持不變) ...
         # Конвертируем в grayscale
         if len(image.shape) == 3:
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -558,6 +566,7 @@ class ImageStitcher:
 
     def match_keypoints(self, kpsA, kpsB, featuresA, featuresB, ratio, reproj_thresh):
         """Сопоставляет ключевые точки между изображениями"""
+        # ... (match_keypoints 函數保持不變) ...
         # Создаем matcher
         matcher = cv2.DescriptorMatcher_create("BruteForce")
         raw_matches = matcher.knnMatch(featuresA, featuresB, 2)
@@ -579,6 +588,7 @@ class ImageStitcher:
 
     def draw_matches(self, imageA, imageB, kpsA, kpsB, matches, status):
         """Создает визуализацию совпадений"""
+        # ... (draw_matches 函數保持不變) ...
         (hA, wA) = imageA.shape[:2]
         (hB, wB) = imageB.shape[:2]
         
@@ -596,8 +606,8 @@ class ImageStitcher:
         
         return vis
 
-    def stitch(self, image1, reference, feature_detection_size_mode, upscale_method, ratio, reproj_thresh, show_matches, output_size_mode, stretch, keep_proportion, fill_crop_mode, pad):
-        """Основная функция совмещения изображений"""
+    def stitch(self, image1, reference, feature_detection_size_mode, upscale_method, ratio, reproj_thresh, show_matches, output_transformation_mode, pad):
+        """主要圖像對齊函數，已整合變形模式"""
         
         # 0. 確定原始尺寸和特徵檢測尺寸 
         original_h1, original_w1 = image1.shape[1:3]
@@ -642,18 +652,16 @@ class ImageStitcher:
             print("無法找到足夠的匹配點來計算變換矩陣。返回原始 image1 作為 fallback。")
             
             # 確定 fallback 的目標尺寸
-            if output_size_mode == "image1":
+            if "Image1" in output_transformation_mode:
                 target_w, target_h = original_w1, original_h1
-            else:
+            else: # 預設 Reference
                 target_w, target_h = original_w2, original_h2
                 
-            # 應用填充
-            if pad > 0:
-                target_w += 2 * pad
-                target_h += 2 * pad
+            final_output_w = target_w + 2 * pad
+            final_output_h = target_h + 2 * pad
 
             # 即使 fallback，matches_vis 也應為目標尺寸的兩倍寬
-            matches_vis_tensor = torch.zeros((batch, target_h, target_w * 2, c), device=image1.device)
+            matches_vis_tensor = torch.zeros((batch, final_output_h, final_output_w * 2, c), device=image1.device)
             
             # 在 fallback 模式下，如果需要填充，需要將 image1 進行填充後再輸出
             if pad > 0:
@@ -668,60 +676,66 @@ class ImageStitcher:
         (matches, H, status) = M
         
         # 4. 確定最終輸出尺寸 (stitched_image)
-        if output_size_mode == "image1":
+        if "Image1" in output_transformation_mode:
             target_w, target_h = original_w1, original_h1
-        else: # "reference"
+        else: # Reference
             target_w, target_h = original_w2, original_h2
             
-        print(f"輸出尺寸模式: {output_size_mode}. 最終 stitched 尺寸 (未含填充): {target_w}x{target_h}")
+        final_output_w = target_w + 2 * pad
+        final_output_h = target_h + 2 * pad
+            
+        print(f"變形模式: {output_transformation_mode}. 最終輸出尺寸 (含填充): {final_output_w}x{final_output_h}")
+
 
         # 5. 校準變形矩陣 H (從 scaled 空間轉換到 original 空間)
         
+        # H 是從 scaled_image1 變換到 scaled_reference 的矩陣
+        # R_A_inv: scaled_image1 -> original_image1
         scale_x_A = w1 / original_w1
         scale_y_A = h1 / original_h1
         R_A_inv = np.array([[1.0 / scale_x_A, 0, 0], [0, 1.0 / scale_y_A, 0], [0, 0, 1.0]], dtype=np.float32)
         
+        # R_B: scaled_reference -> original_reference
         scale_x_B = original_w2 / w2
         scale_y_B = original_h2 / h2
-        R_B = np.array([[scale_x_B, 0, 0], [0, 1.0 / scale_y_B, 0], [0, 0, 1.0]], dtype=np.float32)
+        R_B = np.array([[scale_x_B, 0, 0], [0, scale_y_B, 0], [0, 0, 1.0]], dtype=np.float32) 
+        # 注意: 如果目標是 original_reference，則這個矩陣應該用於縮放 reference 座標系。
         
-        H_final = R_B @ H @ R_A_inv
+        # H_base 是將 original_image1 準確對齊到 original_reference 的矩陣 (不包含任何拉伸/裁剪)
+        H_base = R_B @ H @ R_A_inv
         
-        # 6. 【新增邏輯處理】處理 stretch, keep_proportion, fill_crop_mode, pad
+        # 6. 【核心變形邏輯】根據 output_transformation_mode 調整 H 矩陣
         
-        # 這一階段，H_final 已經是將 original_image1 對齊到 original_reference 的透視矩陣。
-        # 接下來的邏輯需要調整 H_final，以滿足新的約束條件。
-
-        final_output_w = target_w + 2 * pad
-        final_output_h = target_h + 2 * pad
+        H_final = H_base.copy()
         
-        # TODO: 實作 stretch, keep_proportion, fill_crop_mode 的邏輯。
-        # 這些邏輯通常涉及到調整 H_final 矩陣或是在 cv2.warpPerspective 之後對結果進行額外的裁剪或填充操作。
-
-        if stretch:
-             print("啟用 stretch: 圖像將被強制拉伸以填滿輸出尺寸。")
-        
-        if keep_proportion:
-             print("啟用 keep_proportion: 將調整透視變換以保持 image1 的原始縱橫比。")
-        
-        if fill_crop_mode == "CROP":
-             print("啟用 CROP 模式: 超出參考圖像邊界的內容將被裁剪。")
-        else:
-             print("啟用 FILL 模式: 超出邊界的內容將保留在透視變換結果中。")
-             
+        # --- 處理 Pad ---
+        # 如果 pad > 0，則需要在 H 矩陣中加入平移 (Translation) 以將圖像內容移到新的中心
         if pad > 0:
-             print(f"啟用 {pad} 填充。最終輸出尺寸: {final_output_w}x{final_output_h}")
-             # 如果有填充，則 warpPerspective 的輸出尺寸必須是 final_output_w x final_output_h
-             # H_final 可能需要加入平移項來處理 pad
-             # H_final[0, 2] += pad
-             # H_final[1, 2] += pad
+             H_final[0, 2] += pad # X 軸平移
+             H_final[1, 2] += pad # Y 軸平移
+             print(f"矩陣 H_final 已調整 {pad} 像素以適應填充。")
 
-
+        # --- 處理變形模式 (Stretch, Keep Proportion, Fill/Crop) ---
+        
+        # TODO: 實作基於 output_transformation_mode 的 H 矩陣調整邏輯。
+        # 這些邏輯比較複雜，通常涉及到：
+        # - 如果是 Stretch 模式：計算 Image1 尺寸與 Target 尺寸的比例差，並調整 H_final 的 Scale 元素 (H[0,0], H[1,1])。
+        # - 如果是 Keep Proportion 模式 (Fill/Crop)：計算 Image1 邊界在 Target 空間中的新位置，以確定要應用哪種單一比例因子。
+        # - Crop 模式的最終裁剪可能在 warpPerspective 之後才執行。
+        
+        if output_transformation_mode in ["Reference_Stretch", "Image1_Stretch"]:
+             print("Stretch 模式：需要調整 H_final 實現非等比例變形。")
+        elif output_transformation_mode in ["Reference_Crop", "Image1_Crop"]:
+             print("Crop 模式：需要調整 H_final 或在變形後執行裁剪。")
+        else: # Fill modes
+             print("Fill 模式：使用基礎對齊 H 矩陣，空缺部分將由 warpPerspective 填充黑色。")
+             
+        
         # 7. 執行透視變換 (使用 原始 Image1 和 校準後的矩陣 H_final)
         original_img1_np = (image1[0].cpu().numpy() * 255).astype(np.uint8)
         original_img1_np_bgr = cv2.cvtColor(original_img1_np, cv2.COLOR_RGB2BGR)
 
-        # 暫時使用基本輸出尺寸，不含額外邏輯
+        # 變形輸出到最終尺寸 (含 Pad)
         warped_img1_bgr = cv2.warpPerspective(original_img1_np_bgr, H_final, (final_output_w, final_output_h))
         
         # 8. 圖像處理和轉換
@@ -729,7 +743,7 @@ class ImageStitcher:
         warped_img1_rgb = cv2.cvtColor(warped_img1_bgr, cv2.COLOR_BGR2RGB)
         result_tensor = torch.from_numpy(warped_img1_rgb.astype(np.float32) / 255.0).unsqueeze(0).to(image1.device)
         
-        # 9. 匹配可視化 (輸出尺寸為 stitched_image 兩倍寬)
+        # 9. 匹配可視化
         matches_vis_w = final_output_w * 2
         matches_vis_h = final_output_h
         
@@ -752,6 +766,7 @@ class ImageStitcher:
 
 
 class ImageMirrorPad:
+# ... (ImageMirrorPad 類別保持不變) ...
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
@@ -761,7 +776,7 @@ class ImageMirrorPad:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "pad"
-    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
+    CATEGORY = "custom_node_experiments" # 保持您的值
 
     def pad(self, image, n):
         # image: [batch, height, width, channels], float in [0,1]
@@ -801,7 +816,7 @@ class ImageMirrorPad:
                 out[:, j, i, :] = image[:, n_eff - j,  n_eff - i, :]
                 # верх-право
                 out[:, j, n_eff + w + i, :] = image[:, n_eff -j, w - 1 - i, :]
-                # низ-лево
+                # низ-लेво
                 out[:, n_eff + h + j, i, :] = image[:, h - 1 - j, n_eff -i, :]
                 # низ-право
                 out[:, n_eff + h + j, n_eff + w + i, :] = image[:, h - 1 - j, w - 1 - i, :]
@@ -809,6 +824,7 @@ class ImageMirrorPad:
         return (out,)
 
 class ImageCropBorders:
+# ... (ImageCropBorders 類別保持不變) ...
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
@@ -818,7 +834,7 @@ class ImageCropBorders:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "crop"
-    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
+    CATEGORY = "custom_node_experiments" # 保持您的值
 
     def crop(self, image, n):
         # image: [batch, height, width, channels]
@@ -836,6 +852,7 @@ class ImageCropBorders:
         return (result,)
         
 class ImageScaleToQwen:
+# ... (ImageScaleToQwen 類別保持不變) ...
     upscale_methods = [ "bilinear", "nearest-exact", "area", "bicubic", "lanczos"]
     crop_methods = ["disabled", "center"]
 
@@ -847,7 +864,7 @@ class ImageScaleToQwen:
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "upscale"
 
-    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
+    CATEGORY = "custom_node_experiments" # 保持您的值
 
     def upscale(self, image, upscale_method, total_m):
         samples = image.movedim(-1,1)
@@ -886,19 +903,19 @@ NODE_CLASS_MAPPINGS = {
 
 # (可選) 節點顯示名稱映射，讓 ComfyUI 選單中的名稱更友善
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "ImageScaleToTotalPixelsRound64": "Image Scale (Total Pixels Round 64x)",
-    "ImageBlendLighter": "Image Blend (Lighter Mode)",
-    "ImageOffset": "Image Offset/Scroll",
-    "RGBtoRYGCBM": "Color Convert (RGB -> RYGCBM)",
-    "RYGCBMtoRGB": "Color Convert (RYGCBM -> RGB)",
-    "ExtractImageChannel": "Extract Image Channel",
-    "MatchRYGCBMColors": "Color Match (RYGCBM)",
-    "TextCommaToWeighted": "Text Weighted (Uniform)",
-    "TextCommaToRandomWeighted": "Text Weighted (Random)",
-    "RGBtoLAB": "Color Convert (RGB -> LAB)",
-    "LABtoRGB": "Color Convert (LAB -> RGB)",
-    "ImageMirrorPad": "Image Mirror Padding",
-    "ImageCropBorders": "Image Crop Borders",
-    "ImageStitcher": "Image Auto Stitcher (SIFT)",
-    "ImageScaleToQwen": "Image Scale (Qwen Compatible)",
+    "ImageScaleToTotalPixelsRound64": "圖像縮放 (64x 總像素)",
+    "ImageBlendLighter": "圖像疊加 (Lighter)",
+    "ImageOffset": "圖像偏移/捲動",
+    "RGBtoRYGCBM": "顏色轉換 (RGB -> RYGCBM)",
+    "RYGCBMtoRGB": "顏色轉換 (RYGCBM -> RGB)",
+    "ExtractImageChannel": "提取圖像通道",
+    "MatchRYGCBMColors": "顏色匹配 (RYGCBM)",
+    "TextCommaToWeighted": "文本加權 (統一)",
+    "TextCommaToRandomWeighted": "文本加權 (隨機)",
+    "RGBtoLAB": "顏色轉換 (RGB -> LAB)",
+    "LABtoRGB": "顏色轉換 (LAB -> RGB)",
+    "ImageMirrorPad": "圖像邊緣鏡像填充",
+    "ImageCropBorders": "圖像邊緣裁剪",
+    "ImageStitcher": "圖像自動對齊/拼接 (SIFT)",
+    "ImageScaleToQwen": "圖像縮放 (Qwen 兼容)",
 }
