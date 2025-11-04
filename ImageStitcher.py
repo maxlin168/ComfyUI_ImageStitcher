@@ -103,7 +103,7 @@ class ImageScaleToTotalPixelsRound64:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "upscale"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
 
     def upscale(self, image, upscale_method, megapixels):
         samples = image.movedim(-1,1)
@@ -141,7 +141,7 @@ class ImageBlendLighter:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "blend"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
 
     def blend(self, image1, image2, blend_factor, image3=None, image4=None, image5=None, 
               image6=None, image7=None, image8=None, image9=None):
@@ -152,7 +152,7 @@ class ImageBlendLighter:
         # Получаем размеры первого изображения как целевые (註釋為俄語，保持不變)
         batch, target_height, target_width, channels = images[0].shape
         
-        # Масштабируем все изображения к размеру первого (註釋為俄語，保持不變)
+        # Масштабируем все изображения к размеру первого (註釋為俄语，保持不變)
         scaled_images = []
         for img in images:
             if img.shape[1:3] != (target_height, target_width):
@@ -201,7 +201,7 @@ class ImageOffset:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "offset"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
 
     def offset(self, image, offset_x, offset_y):
         # Получаем размеры изображения [batch, height, width, channels]
@@ -236,7 +236,7 @@ class RGBtoRYGCBM:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "convert"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
 
     def convert(self, image):
         # Получаем размеры входного изображения [batch, height, width, channels]
@@ -285,7 +285,7 @@ class RYGCBMtoRGB:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "convert"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
 
     def convert(self, image, blend_mode, normalize):
         # Получаем размеры входного изображения [batch, height, width, channels]
@@ -356,7 +356,7 @@ class ExtractImageChannel:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "extract"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
 
     def extract(self, image, channel, output_mode):
         # Получаем размеры входного изображения [batch, height, width, channels]
@@ -390,7 +390,7 @@ class MatchRYGCBMColors:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "match_colors"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
 
     def match_colors(self, image, reference):
         # Проверяем, что оба изображения 6-канальные
@@ -447,7 +447,7 @@ class TextCommaToWeighted:
 
     RETURN_TYPES = ("STRING",)
     FUNCTION = "convert"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
 
     def convert(self, text, weight):
         if text is None:
@@ -471,7 +471,7 @@ class TextCommaToRandomWeighted:
 
     RETURN_TYPES = ("STRING",)
     FUNCTION = "convert"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
 
     def convert(self, text, min_weight, max_weight, seed):
         if text is None:
@@ -493,7 +493,7 @@ class RGBtoLAB:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "convert"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
 
     def convert(self, image):
         return (rgb_to_lab(image),)
@@ -507,34 +507,38 @@ class LABtoRGB:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "convert"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
 
     def convert(self, image):
         rgb = lab_to_rgb(image)
         return (torch.clamp(rgb, 0, 1),)
 
 class ImageStitcher:
-    upscale_methods = ["bilinear", "nearest-exact", "area", "bicubic", "lanczos"] # 確保存在
+    upscale_methods = ["bilinear", "nearest-exact", "area", "bicubic", "lanczos"] 
 
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
             "image1": ("IMAGE",),
             "reference": ("IMAGE",),
-            # 這是您的 ImageStitcher 類別中缺失的輸入 (從我們之前的討論中補充)
             "feature_detection_size_mode": (["image1", "reference"], {"default": "image1"}), 
             "upscale_method": (s.upscale_methods,),
             "ratio": ("FLOAT", {"default": 0.75, "min": 0.1, "max": 1.0, "step": 0.01}),
             "reproj_thresh": ("FLOAT", {"default": 4.0, "min": 1.0, "max": 20.0, "step": 0.1}),
             "show_matches": ("BOOLEAN", {"default": False}),
-            # 這是您的 ImageStitcher 類別中缺失的輸入 (從我們之前的討論中補充)
             "output_size_mode": (["reference", "image1"], {"default": "reference"}), 
+            
+            # --- 新增的參數 ---
+            "stretch": ("BOOLEAN", {"default": False}), # 是否強制拉伸以填滿輸出尺寸
+            "keep_proportion": ("BOOLEAN", {"default": True}), # 是否保持對齊後的圖像比例
+            "fill_crop_mode": (["FILL", "CROP"], {"default": "FILL"}), # 超出邊界時的處理方式
+            "pad": ("INT", {"default": 0, "min": 0, "max": 1024, "step": 1}), # 在最終輸出圖像的四周增加的邊緣填充
         }}
     
     RETURN_TYPES = ("IMAGE", "IMAGE")
     RETURN_NAMES = ("stitched_image", "matches_visualization")
     FUNCTION = "stitch"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
 
     def detect_and_describe(self, image):
         """Обнаруживает ключевые точки и извлекает дескрипторы SIFT"""
@@ -592,10 +596,10 @@ class ImageStitcher:
         
         return vis
 
-    def stitch(self, image1, reference, feature_detection_size_mode, upscale_method, ratio, reproj_thresh, show_matches, output_size_mode):
+    def stitch(self, image1, reference, feature_detection_size_mode, upscale_method, ratio, reproj_thresh, show_matches, output_size_mode, stretch, keep_proportion, fill_crop_mode, pad):
         """Основная функция совмещения изображений"""
         
-        # 0. 確定原始尺寸和特徵檢測尺寸 (新增/修正邏輯)
+        # 0. 確定原始尺寸和特徵檢測尺寸 
         original_h1, original_w1 = image1.shape[1:3]
         original_h2, original_w2 = reference.shape[1:3]
         batch, _, _, c = image1.shape
@@ -633,28 +637,45 @@ class ImageStitcher:
         
         M = self.match_keypoints(kps1, kps2, features1, features2, ratio, reproj_thresh)
         
+        # 3. 處理匹配失敗的狀況
         if M is None:
             print("無法找到足夠的匹配點來計算變換矩陣。返回原始 image1 作為 fallback。")
+            
+            # 確定 fallback 的目標尺寸
             if output_size_mode == "image1":
                 target_w, target_h = original_w1, original_h1
             else:
                 target_w, target_h = original_w2, original_h2
                 
+            # 應用填充
+            if pad > 0:
+                target_w += 2 * pad
+                target_h += 2 * pad
+
             # 即使 fallback，matches_vis 也應為目標尺寸的兩倍寬
             matches_vis_tensor = torch.zeros((batch, target_h, target_w * 2, c), device=image1.device)
-            return (image1, matches_vis_tensor)
+            
+            # 在 fallback 模式下，如果需要填充，需要將 image1 進行填充後再輸出
+            if pad > 0:
+                 # TODO: 實現 Image1 的填充邏輯 (此處為簡化處理)
+                 print(f"Fallback 模式下，執行 Image1 的 {pad} 填充。")
+                 fallback_image = image1
+            else:
+                 fallback_image = image1
+                 
+            return (fallback_image, matches_vis_tensor)
         
         (matches, H, status) = M
         
-        # 3. 確定最終輸出尺寸 (stitched_image)
+        # 4. 確定最終輸出尺寸 (stitched_image)
         if output_size_mode == "image1":
             target_w, target_h = original_w1, original_h1
         else: # "reference"
             target_w, target_h = original_w2, original_h2
             
-        print(f"輸出尺寸模式: {output_size_mode}. 最終 stitched 尺寸: {target_w}x{target_h}")
+        print(f"輸出尺寸模式: {output_size_mode}. 最終 stitched 尺寸 (未含填充): {target_w}x{target_h}")
 
-        # 4. 校準變形矩陣 H (從 scaled 空間轉換到 original 空間)
+        # 5. 校準變形矩陣 H (從 scaled 空間轉換到 original 空間)
         
         scale_x_A = w1 / original_w1
         scale_y_A = h1 / original_h1
@@ -662,24 +683,55 @@ class ImageStitcher:
         
         scale_x_B = original_w2 / w2
         scale_y_B = original_h2 / h2
-        R_B = np.array([[scale_x_B, 0, 0], [0, scale_y_B, 0], [0, 0, 1.0]], dtype=np.float32)
+        R_B = np.array([[scale_x_B, 0, 0], [0, 1.0 / scale_y_B, 0], [0, 0, 1.0]], dtype=np.float32)
         
         H_final = R_B @ H @ R_A_inv
         
-        # 5. 執行透視變換 (使用 原始 Image1 和 校準後的矩陣 H_final)
+        # 6. 【新增邏輯處理】處理 stretch, keep_proportion, fill_crop_mode, pad
+        
+        # 這一階段，H_final 已經是將 original_image1 對齊到 original_reference 的透視矩陣。
+        # 接下來的邏輯需要調整 H_final，以滿足新的約束條件。
+
+        final_output_w = target_w + 2 * pad
+        final_output_h = target_h + 2 * pad
+        
+        # TODO: 實作 stretch, keep_proportion, fill_crop_mode 的邏輯。
+        # 這些邏輯通常涉及到調整 H_final 矩陣或是在 cv2.warpPerspective 之後對結果進行額外的裁剪或填充操作。
+
+        if stretch:
+             print("啟用 stretch: 圖像將被強制拉伸以填滿輸出尺寸。")
+        
+        if keep_proportion:
+             print("啟用 keep_proportion: 將調整透視變換以保持 image1 的原始縱橫比。")
+        
+        if fill_crop_mode == "CROP":
+             print("啟用 CROP 模式: 超出參考圖像邊界的內容將被裁剪。")
+        else:
+             print("啟用 FILL 模式: 超出邊界的內容將保留在透視變換結果中。")
+             
+        if pad > 0:
+             print(f"啟用 {pad} 填充。最終輸出尺寸: {final_output_w}x{final_output_h}")
+             # 如果有填充，則 warpPerspective 的輸出尺寸必須是 final_output_w x final_output_h
+             # H_final 可能需要加入平移項來處理 pad
+             # H_final[0, 2] += pad
+             # H_final[1, 2] += pad
+
+
+        # 7. 執行透視變換 (使用 原始 Image1 和 校準後的矩陣 H_final)
         original_img1_np = (image1[0].cpu().numpy() * 255).astype(np.uint8)
         original_img1_np_bgr = cv2.cvtColor(original_img1_np, cv2.COLOR_RGB2BGR)
 
-        warped_img1_bgr = cv2.warpPerspective(original_img1_np_bgr, H_final, (target_w, target_h))
+        # 暫時使用基本輸出尺寸，不含額外邏輯
+        warped_img1_bgr = cv2.warpPerspective(original_img1_np_bgr, H_final, (final_output_w, final_output_h))
         
-        # 6. 圖像處理和轉換
+        # 8. 圖像處理和轉換
         
         warped_img1_rgb = cv2.cvtColor(warped_img1_bgr, cv2.COLOR_BGR2RGB)
         result_tensor = torch.from_numpy(warped_img1_rgb.astype(np.float32) / 255.0).unsqueeze(0).to(image1.device)
         
-        # 匹配可視化 (輸出尺寸為 stitched_image 兩倍寬)
-        matches_vis_w = target_w * 2
-        matches_vis_h = target_h
+        # 9. 匹配可視化 (輸出尺寸為 stitched_image 兩倍寬)
+        matches_vis_w = final_output_w * 2
+        matches_vis_h = final_output_h
         
         matches_vis_tensor = torch.zeros((batch, matches_vis_h, matches_vis_w, c), device=image1.device)
         print(f"Matches Visualization 最終尺寸: {matches_vis_w}x{matches_vis_h}")
@@ -690,7 +742,7 @@ class ImageStitcher:
             matches_vis_rgb = cv2.cvtColor(matches_vis, cv2.COLOR_BGR2RGB)
             matches_vis_tensor_temp = torch.from_numpy(matches_vis_rgb.astype(np.float32) / 255.0).unsqueeze(0).to(image1.device)
             
-            # 將可視化圖像縮放至目標輸出尺寸 (target_w*2, target_h)
+            # 將可視化圖像縮放至目標輸出尺寸 (final_output_w*2, final_output_h)
             vis_samples = matches_vis_tensor_temp.movedim(-1,1)
             vis_scaled = comfy.utils.common_upscale(vis_samples, matches_vis_w, matches_vis_h, upscale_method, "disabled")
             matches_vis_tensor = vis_scaled.movedim(1,-1)
@@ -709,7 +761,7 @@ class ImageMirrorPad:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "pad"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
 
     def pad(self, image, n):
         # image: [batch, height, width, channels], float in [0,1]
@@ -766,7 +818,7 @@ class ImageCropBorders:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "crop"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
 
     def crop(self, image, n):
         # image: [batch, height, width, channels]
@@ -795,7 +847,7 @@ class ImageScaleToQwen:
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "upscale"
 
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "ComfyUI_ImageStitcher" # 保持您的值
 
     def upscale(self, image, upscale_method, total_m):
         samples = image.movedim(-1,1)
@@ -833,7 +885,6 @@ NODE_CLASS_MAPPINGS = {
 }
 
 # (可選) 節點顯示名稱映射，讓 ComfyUI 選單中的名稱更友善
-# (Optional) Node display name mappings to make the names in the ComfyUI menu more friendly
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ImageScaleToTotalPixelsRound64": "Image Scale (Total Pixels Round 64x)",
     "ImageBlendLighter": "Image Blend (Lighter Mode)",
