@@ -77,4 +77,28 @@ pip install opencv-python
 
 3. 圖像實用工具
 * ImageScaleToTotalPixelsRound64: 將圖像尺寸縮放到一個接近指定百萬像素 (Megapixels) 總數的尺寸，並確保寬度和高度都是 64 的倍數。
-* ImageScaleToQwen: 類似於上一個節點，但確保
+* ImageScaleToQwen: 類似於上一個節點，但確保尺寸是 16 的倍數，適用於一些對尺寸有特定要求的模型（例如 Qwen-VL）。
+* ImageBlendLighter: 將多張圖像進行像素級的最大值（Lighter Blend）混合。
+* ImageOffset: 將圖像內容向指定 X/Y 軸方向平移，邊緣用黑色填充。
+* ImageMirrorPad / ImageCropBorders: 用於創建基於邊界鏡像的填充和相應的裁剪功能。
+* ExtractImageChannel: 從多通道圖像中提取單個通道。
+
+4. 文本處理工具
+* TextCommaToWeighted: 將逗號分隔的提示詞列表，轉換為帶有統一權重（例如 (prompt:0.4)）的格式。
+* TextCommaToRandomWeighted: 將提示詞轉換為帶有隨機權重（在指定範圍內）的格式，用於提示詞實驗。
+
+---
+
+👏 致謝 (Acknowledgement)
+
+ImageStitcher 節點的部分邏輯和結構，以及部分顏色處理節點，受到了以下 GitHub 儲存庫的啟發和參考：
+
+* https://github.com/addddd2/AI_Generated_nodes
+
+感謝開源社群對這些功能實現的貢獻。
+
+---
+
+📝 備註
+* 由於 SIFT 算法是計算密集型的，在使用 ImageStitcher 時，如果輸入圖過大，建議先在 feature_detection_size_mode 中選擇一個適中的參考尺寸，以提高性能和匹配成功率。
+* 此節點集仍在實驗階段 (custom_node_experiments 分類)，功能可能會根據需求進行調整和優化。
