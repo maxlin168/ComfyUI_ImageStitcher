@@ -833,20 +833,21 @@ NODE_CLASS_MAPPINGS = {
 }
 
 # (可選) 節點顯示名稱映射，讓 ComfyUI 選單中的名稱更友善
+# (Optional) Node display name mappings to make the names in the ComfyUI menu more friendly
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "ImageScaleToTotalPixelsRound64": "圖像縮放 (64x 總像素)",
-    "ImageBlendLighter": "圖像疊加 (Lighter)",
-    "ImageOffset": "圖像偏移/捲動",
-    "RGBtoRYGCBM": "顏色轉換 (RGB -> RYGCBM)",
-    "RYGCBMtoRGB": "顏色轉換 (RYGCBM -> RGB)",
-    "ExtractImageChannel": "提取圖像通道",
-    "MatchRYGCBMColors": "顏色匹配 (RYGCBM)",
-    "TextCommaToWeighted": "文本加權 (統一)",
-    "TextCommaToRandomWeighted": "文本加權 (隨機)",
-    "RGBtoLAB": "顏色轉換 (RGB -> LAB)",
-    "LABtoRGB": "顏色轉換 (LAB -> RGB)",
-    "ImageMirrorPad": "圖像邊緣鏡像填充",
-    "ImageCropBorders": "圖像邊緣裁剪",
-    "ImageStitcher": "圖像自動對齊/拼接 (SIFT)",
-    "ImageScaleToQwen": "圖像縮放 (Qwen 兼容)",
+    "ImageScaleToTotalPixelsRound64": "Image Scale (Total Pixels Round 64x)",
+    "ImageBlendLighter": "Image Blend (Lighter Mode)",
+    "ImageOffset": "Image Offset/Scroll",
+    "RGBtoRYGCBM": "Color Convert (RGB -> RYGCBM)",
+    "RYGCBMtoRGB": "Color Convert (RYGCBM -> RGB)",
+    "ExtractImageChannel": "Extract Image Channel",
+    "MatchRYGCBMColors": "Color Match (RYGCBM)",
+    "TextCommaToWeighted": "Text Weighted (Uniform)",
+    "TextCommaToRandomWeighted": "Text Weighted (Random)",
+    "RGBtoLAB": "Color Convert (RGB -> LAB)",
+    "LABtoRGB": "Color Convert (LAB -> RGB)",
+    "ImageMirrorPad": "Image Mirror Padding",
+    "ImageCropBorders": "Image Crop Borders",
+    "ImageStitcher": "Image Auto Stitcher (SIFT)",
+    "ImageScaleToQwen": "Image Scale (Qwen Compatible)",
 }
