@@ -7,14 +7,13 @@ import cv2
 import numpy as np
 
 # --- 顏色空間轉換輔助函數 (LAB) ---
-# ... (LAB 相關輔助函數保持不變) ...
 
 def rgb_to_xyz(rgb):
     mask = rgb > 0.04045
     rgb[mask] = torch.pow((rgb[mask] + 0.055) / 1.055, 2.4)
     rgb[~mask] = rgb[~mask] / 12.92
     
-    # 這是您提供的較標準的 sRGB to XYZ D65 矩陣
+    # 標準 sRGB to XYZ D65 矩陣
     xyz_matrix = torch.tensor([
         [0.4124564, 0.3575761, 0.1804375],
         [0.2126729, 0.7151522, 0.0721750],
@@ -87,9 +86,40 @@ def lab_to_rgb(lab):
     xyz = lab_to_xyz(lab)
     rgb = xyz_to_rgb(xyz)
     return rgb
+
+# --- 顏色轉換節點 ---
+
+class RGBtoLAB:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "image": ("IMAGE",),
+        }}
     
-# --- 其他輔助類別 (ImageScaleToTotalPixelsRound64, ImageBlendLighter, ImageOffset, etc.) 保持不變 ---
-# ...
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "convert"
+    CATEGORY = "custom_node_experiments"
+
+    def convert(self, image):
+        return (rgb_to_lab(image),)
+
+class LABtoRGB:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "image": ("IMAGE",),
+        }}
+    
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "convert"
+    CATEGORY = "custom_node_experiments"
+
+    def convert(self, image):
+        rgb = lab_to_rgb(image)
+        return (torch.clamp(rgb, 0, 1),)
+    
+# --- 圖像處理節點 ---
+
 class ImageScaleToTotalPixelsRound64:
     upscale_methods = ["bilinear", "nearest-exact", "area", "bicubic", "lanczos"]
 
@@ -103,7 +133,7 @@ class ImageScaleToTotalPixelsRound64:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "upscale"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "custom_node_experiments" 
 
     def upscale(self, image, upscale_method, megapixels):
         samples = image.movedim(-1,1)
@@ -141,18 +171,18 @@ class ImageBlendLighter:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "blend"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "custom_node_experiments" 
 
     def blend(self, image1, image2, blend_factor, image3=None, image4=None, image5=None, 
               image6=None, image7=None, image8=None, image9=None):
-        # Собираем все непустые изображения в список (註釋為俄語，保持不變)
+        # Собираем все непустые изображения в список 
         images = [img for img in [image1, image2, image3, image4, image5, 
                                  image6, image7, image8, image9] if img is not None]
         
-        # Получаем размеры первого изображения как целевые (註釋為俄語，保持不變)
+        # Получаем размеры первого изображения как целевые 
         batch, target_height, target_width, channels = images[0].shape
         
-        # Масштабируем все изображения к размеру первого (註釋為俄语，保持不變)
+        # Масштабируем все изображения к размеру первого 
         scaled_images = []
         for img in images:
             if img.shape[1:3] != (target_height, target_width):
@@ -201,7 +231,7 @@ class ImageOffset:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "offset"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "custom_node_experiments"
 
     def offset(self, image, offset_x, offset_y):
         # Получаем размеры изображения [batch, height, width, channels]
@@ -236,7 +266,7 @@ class RGBtoRYGCBM:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "convert"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "custom_node_experiments"
 
     def convert(self, image):
         # Получаем размеры входного изображения [batch, height, width, channels]
@@ -260,16 +290,16 @@ class RGBtoRYGCBM:
         M = torch.minimum(R, B)  # Пурпурный (минимум из R и B)
         
         # Усиливаем основные цвета в 2 раза и вычитаем половину смешанных
-        R = torch.maximum(R*2 - Y/2 - M/2, torch.zeros_like(R))  # Усиливаем R и убираем половину Y и M
-        G = torch.maximum(G*2 - Y/2 - C/2, torch.zeros_like(G))  # Усиливаем G и убираем половину Y и C
-        B = torch.maximum(B*2 - C/2 - M/2, torch.zeros_like(B))  # Усиливаем B и убираем половину C и M
+        R_prime = torch.maximum(R*2 - Y/2 - M/2, torch.zeros_like(R))
+        G_prime = torch.maximum(G*2 - Y/2 - C/2, torch.zeros_like(G))
+        B_prime = torch.maximum(B*2 - C/2 - M/2, torch.zeros_like(B))
         
         # Заполняем каналы RYGCBM
-        result[..., 0] = R  # Красный (усиленный)
+        result[..., 0] = R_prime  # Красный (усиленный)
         result[..., 1] = Y  # Желтый
-        result[..., 2] = G  # Зеленый (усиленный)
+        result[..., 2] = G_prime  # Зеленый (усиленный)
         result[..., 3] = C  # Голубой
-        result[..., 4] = B  # Синий (усиленный)
+        result[..., 4] = B_prime  # Синий (усиленный)
         result[..., 5] = M  # Пурпурный
         
         return (result,)
@@ -285,7 +315,7 @@ class RYGCBMtoRGB:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "convert"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "custom_node_experiments" 
 
     def convert(self, image, blend_mode, normalize):
         # Получаем размеры входного изображения [batch, height, width, channels]
@@ -356,7 +386,7 @@ class ExtractImageChannel:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "extract"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "custom_node_experiments" 
 
     def extract(self, image, channel, output_mode):
         # Получаем размеры входного изображения [batch, height, width, channels]
@@ -390,7 +420,7 @@ class MatchRYGCBMColors:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "match_colors"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "custom_node_experiments"
 
     def match_colors(self, image, reference):
         # Проверяем, что оба изображения 6-канальные
@@ -398,7 +428,6 @@ class MatchRYGCBMColors:
             raise ValueError("Both images must be 6-channel RYGCBM images")
         
         # Вычисляем среднее и стандартное отклонение для каждого канала
-        # Используем keepdim=True для сохранения размерности для бродкастинга
         input_mean = torch.mean(image, dim=(1, 2), keepdim=True)
         input_std = torch.std(image, dim=(1, 2), keepdim=True)
         
@@ -433,340 +462,11 @@ class MatchRYGCBMColors:
         for i, ch in enumerate(channels):
             print(f"{ch}: mean = {result_mean[0,0,0,i]:.4f}, std = {result_std[0,0,0,i]:.4f}")
         
-        print("\n" + "-"*50)  # Разделитель для удобства чтения
+        print("\n" + "-"*50)
         
         return (result,)
 
-class TextCommaToWeighted:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {
-            "text": ("STRING", {"default": ""}),
-            "weight": ("FLOAT", {"default": 0.4, "min": 0.0, "max": 10.0, "step": 0.01}),
-        }}
-
-    RETURN_TYPES = ("STRING",)
-    FUNCTION = "convert"
-    CATEGORY = "custom_node_experiments" # 保持您的值
-
-    def convert(self, text, weight):
-        if text is None:
-            return ("",)
-        parts = [p.strip() for p in str(text).split(",")]
-        parts = [p for p in parts if p]
-        if not parts:
-            return ("",)
-        formatted = ", ".join([f"({p}:{weight})" for p in parts])
-        return (formatted,)
-
-class TextCommaToRandomWeighted:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {
-            "text": ("STRING", {"default": ""}),
-            "min_weight": ("FLOAT", {"default": 0.1, "min": 0.0, "max": 10.0, "step": 0.01}),
-            "max_weight": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
-            "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-        }}
-
-    RETURN_TYPES = ("STRING",)
-    FUNCTION = "convert"
-    CATEGORY = "custom_node_experiments" # 保持您的值
-
-    def convert(self, text, min_weight, max_weight, seed):
-        if text is None:
-            return ("",)
-        random.seed(seed)
-        parts = [p.strip() for p in str(text).split(",")]
-        parts = [p for p in parts if p]
-        if not parts:
-            return ("",)
-        formatted = ", ".join([f"({p}:{random.uniform(min_weight, max_weight):.2f})" for p in parts])
-        return (formatted,)
-
-class RGBtoLAB:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {
-            "image": ("IMAGE",),
-        }}
-    
-    RETURN_TYPES = ("IMAGE",)
-    FUNCTION = "convert"
-    CATEGORY = "custom_node_experiments" # 保持您的值
-
-    def convert(self, image):
-        return (rgb_to_lab(image),)
-
-class LABtoRGB:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {
-            "image": ("IMAGE",),
-        }}
-    
-    RETURN_TYPES = ("IMAGE",)
-    FUNCTION = "convert"
-    CATEGORY = "custom_node_experiments" # 保持您的值
-
-    def convert(self, image):
-        rgb = lab_to_rgb(image)
-        return (torch.clamp(rgb, 0, 1),)
-
-class ImageStitcher:
-    upscale_methods = ["bilinear", "nearest-exact", "area", "bicubic", "lanczos"] 
-    
-    # 整合的輸出變形模式選單
-    output_modes = [
-        "Reference_Fill",           # 保持比例，以 Reference 尺寸為目標，超出邊界填充 (pad/black)
-        "Reference_Crop",           # 保持比例，以 Reference 尺寸為目標，超出邊界裁剪 (Crop)
-        "Reference_Stretch",        # 忽略比例，拉伸填滿 Reference 尺寸
-        "Image1_Fill",              # 保持比例，以 Image1 尺寸為目標，超出邊界填充
-        "Image1_Crop",              # 保持比例，以 Image1 尺寸為目標，超出邊界裁剪
-        "Image1_Stretch",           # 忽略比例，拉伸填滿 Image1 尺寸
-    ]
-
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {
-            "image1": ("IMAGE",),
-            "reference": ("IMAGE",),
-            "feature_detection_size_mode": (["image1", "reference"], {"default": "image1"}), 
-            "upscale_method": (s.upscale_methods,),
-            "ratio": ("FLOAT", {"default": 0.75, "min": 0.1, "max": 1.0, "step": 0.01}),
-            "reproj_thresh": ("FLOAT", {"default": 4.0, "min": 1.0, "max": 20.0, "step": 0.1}),
-            "show_matches": ("BOOLEAN", {"default": False}),
-            
-            # --- 整合後的輸出變形控制 ---
-            "output_transformation_mode": (s.output_modes, {"default": "Reference_Fill"}), 
-            "pad": ("INT", {"default": 0, "min": 0, "max": 1024, "step": 1}), # 額外的填充量，所有模式下適用
-        }}
-    
-    RETURN_TYPES = ("IMAGE", "IMAGE")
-    RETURN_NAMES = ("stitched_image", "matches_visualization")
-    FUNCTION = "stitch"
-    CATEGORY = "custom_node_experiments" # 保持您的值
-
-    def detect_and_describe(self, image):
-        """Обнаруживает ключевые точки и извлекает дескрипторы SIFT"""
-        # ... (detect_and_describe 函數保持不變) ...
-        # Конвертируем в grayscale
-        if len(image.shape) == 3:
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        else:
-            gray = image
-        
-        # Создаем SIFT детектор
-        descriptor = cv2.SIFT_create()
-        (kps, features) = descriptor.detectAndCompute(gray, None)
-        
-        # Конвертируем keypoints в numpy array
-        kps = np.float32([kp.pt for kp in kps])
-        return (kps, features)
-
-    def match_keypoints(self, kpsA, kpsB, featuresA, featuresB, ratio, reproj_thresh):
-        """Сопоставляет ключевые точки между изображениями"""
-        # ... (match_keypoints 函數保持不變) ...
-        # Создаем matcher
-        matcher = cv2.DescriptorMatcher_create("BruteForce")
-        raw_matches = matcher.knnMatch(featuresA, featuresB, 2)
-        
-        matches = []
-        # Применяем тест Лоу
-        for m in raw_matches:
-            if len(m) == 2 and m[0].distance < m[1].distance * ratio:
-                matches.append((m[0].trainIdx, m[0].queryIdx))
-        
-        # Вычисляем гомографию если достаточно совпадений
-        if len(matches) > 4:
-            ptsA = np.float32([kpsA[i] for (_, i) in matches])
-            ptsB = np.float32([kpsB[i] for (i, _) in matches])
-            (H, status) = cv2.findHomography(ptsA, ptsB, cv2.RANSAC, reproj_thresh)
-            return (matches, H, status)
-        
-        return None
-
-    def draw_matches(self, imageA, imageB, kpsA, kpsB, matches, status):
-        """Создает визуализацию совпадений"""
-        # ... (draw_matches 函數保持不變) ...
-        (hA, wA) = imageA.shape[:2]
-        (hB, wB) = imageB.shape[:2]
-        
-        # Создаем изображение для визуализации
-        vis = np.zeros((max(hA, hB), wA + wB, 3), dtype=np.uint8)
-        vis[0:hA, 0:wA] = imageA
-        vis[0:hB, wA:] = imageB
-        
-        # Рисуем линии совпадений
-        for ((trainIdx, queryIdx), s) in zip(matches, status):
-            if s == 1:
-                ptA = (int(kpsA[queryIdx][0]), int(kpsA[queryIdx][1]))
-                ptB = (int(kpsB[trainIdx][0]) + wA, int(kpsB[trainIdx][1]))
-                cv2.line(vis, ptA, ptB, (0, 255, 0), 1)
-        
-        return vis
-
-    def stitch(self, image1, reference, feature_detection_size_mode, upscale_method, ratio, reproj_thresh, show_matches, output_transformation_mode, pad):
-        """主要圖像對齊函數，已整合變形模式"""
-        
-        # 0. 確定原始尺寸和特徵檢測尺寸 
-        original_h1, original_w1 = image1.shape[1:3]
-        original_h2, original_w2 = reference.shape[1:3]
-        batch, _, _, c = image1.shape
-
-        if feature_detection_size_mode == "image1":
-            detect_w, detect_h = original_w1, original_h1
-        else: # "reference"
-            detect_w, detect_h = original_w2, original_h2
-        
-        print(f"特徵檢測尺寸模式: {feature_detection_size_mode}. 統一尺寸: {detect_w}x{detect_h}")
-        
-        # 0.1 執行縮放 (兩張圖都縮放到統一尺寸進行特徵檢測)
-        
-        samples1 = image1.movedim(-1,1)
-        scaled_samples1 = comfy.utils.common_upscale(samples1, detect_w, detect_h, upscale_method, "disabled")
-        scaled_image1 = scaled_samples1.movedim(1,-1)
-        
-        samples2 = reference.movedim(-1,1)
-        scaled_samples2 = comfy.utils.common_upscale(samples2, detect_w, detect_h, upscale_method, "disabled")
-        scaled_image2 = scaled_samples2.movedim(1,-1)
-
-        w1, h1 = detect_w, detect_h
-        w2, h2 = detect_w, detect_h
-
-        # 1. 準備縮放後的圖像 (Tensor -> NumPy Array, RGB -> BGR)
-        img1_np = (scaled_image1[0].cpu().numpy() * 255).astype(np.uint8)
-        img2_np = (scaled_image2[0].cpu().numpy() * 255).astype(np.uint8)
-        
-        img1_np_bgr = cv2.cvtColor(img1_np, cv2.COLOR_RGB2BGR)
-        img2_np_bgr = cv2.cvtColor(img2_np, cv2.COLOR_RGB2BGR)
-        
-        # 2. 檢測和匹配關鍵點 (在縮放後的圖像上操作)
-        (kps1, features1) = self.detect_and_describe(img1_np_bgr)
-        (kps2, features2) = self.detect_and_describe(img2_np_bgr)
-        
-        M = self.match_keypoints(kps1, kps2, features1, features2, ratio, reproj_thresh)
-        
-        # 3. 處理匹配失敗的狀況
-        if M is None:
-            print("無法找到足夠的匹配點來計算變換矩陣。返回原始 image1 作為 fallback。")
-            
-            # 確定 fallback 的目標尺寸
-            if "Image1" in output_transformation_mode:
-                target_w, target_h = original_w1, original_h1
-            else: # 預設 Reference
-                target_w, target_h = original_w2, original_h2
-                
-            final_output_w = target_w + 2 * pad
-            final_output_h = target_h + 2 * pad
-
-            # 即使 fallback，matches_vis 也應為目標尺寸的兩倍寬
-            matches_vis_tensor = torch.zeros((batch, final_output_h, final_output_w * 2, c), device=image1.device)
-            
-            # 在 fallback 模式下，如果需要填充，需要將 image1 進行填充後再輸出
-            if pad > 0:
-                 # TODO: 實現 Image1 的填充邏輯 (此處為簡化處理)
-                 print(f"Fallback 模式下，執行 Image1 的 {pad} 填充。")
-                 fallback_image = image1
-            else:
-                 fallback_image = image1
-                 
-            return (fallback_image, matches_vis_tensor)
-        
-        (matches, H, status) = M
-        
-        # 4. 確定最終輸出尺寸 (stitched_image)
-        if "Image1" in output_transformation_mode:
-            target_w, target_h = original_w1, original_h1
-        else: # Reference
-            target_w, target_h = original_w2, original_h2
-            
-        final_output_w = target_w + 2 * pad
-        final_output_h = target_h + 2 * pad
-            
-        print(f"變形模式: {output_transformation_mode}. 最終輸出尺寸 (含填充): {final_output_w}x{final_output_h}")
-
-
-        # 5. 校準變形矩陣 H (從 scaled 空間轉換到 original 空間)
-        
-        # H 是從 scaled_image1 變換到 scaled_reference 的矩陣
-        # R_A_inv: scaled_image1 -> original_image1
-        scale_x_A = w1 / original_w1
-        scale_y_A = h1 / original_h1
-        R_A_inv = np.array([[1.0 / scale_x_A, 0, 0], [0, 1.0 / scale_y_A, 0], [0, 0, 1.0]], dtype=np.float32)
-        
-        # R_B: scaled_reference -> original_reference
-        scale_x_B = original_w2 / w2
-        scale_y_B = original_h2 / h2
-        R_B = np.array([[scale_x_B, 0, 0], [0, scale_y_B, 0], [0, 0, 1.0]], dtype=np.float32) 
-        # 注意: 如果目標是 original_reference，則這個矩陣應該用於縮放 reference 座標系。
-        
-        # H_base 是將 original_image1 準確對齊到 original_reference 的矩陣 (不包含任何拉伸/裁剪)
-        H_base = R_B @ H @ R_A_inv
-        
-        # 6. 【核心變形邏輯】根據 output_transformation_mode 調整 H 矩陣
-        
-        H_final = H_base.copy()
-        
-        # --- 處理 Pad ---
-        # 如果 pad > 0，則需要在 H 矩陣中加入平移 (Translation) 以將圖像內容移到新的中心
-        if pad > 0:
-             H_final[0, 2] += pad # X 軸平移
-             H_final[1, 2] += pad # Y 軸平移
-             print(f"矩陣 H_final 已調整 {pad} 像素以適應填充。")
-
-        # --- 處理變形模式 (Stretch, Keep Proportion, Fill/Crop) ---
-        
-        # TODO: 實作基於 output_transformation_mode 的 H 矩陣調整邏輯。
-        # 這些邏輯比較複雜，通常涉及到：
-        # - 如果是 Stretch 模式：計算 Image1 尺寸與 Target 尺寸的比例差，並調整 H_final 的 Scale 元素 (H[0,0], H[1,1])。
-        # - 如果是 Keep Proportion 模式 (Fill/Crop)：計算 Image1 邊界在 Target 空間中的新位置，以確定要應用哪種單一比例因子。
-        # - Crop 模式的最終裁剪可能在 warpPerspective 之後才執行。
-        
-        if output_transformation_mode in ["Reference_Stretch", "Image1_Stretch"]:
-             print("Stretch 模式：需要調整 H_final 實現非等比例變形。")
-        elif output_transformation_mode in ["Reference_Crop", "Image1_Crop"]:
-             print("Crop 模式：需要調整 H_final 或在變形後執行裁剪。")
-        else: # Fill modes
-             print("Fill 模式：使用基礎對齊 H 矩陣，空缺部分將由 warpPerspective 填充黑色。")
-             
-        
-        # 7. 執行透視變換 (使用 原始 Image1 和 校準後的矩陣 H_final)
-        original_img1_np = (image1[0].cpu().numpy() * 255).astype(np.uint8)
-        original_img1_np_bgr = cv2.cvtColor(original_img1_np, cv2.COLOR_RGB2BGR)
-
-        # 變形輸出到最終尺寸 (含 Pad)
-        warped_img1_bgr = cv2.warpPerspective(original_img1_np_bgr, H_final, (final_output_w, final_output_h))
-        
-        # 8. 圖像處理和轉換
-        
-        warped_img1_rgb = cv2.cvtColor(warped_img1_bgr, cv2.COLOR_BGR2RGB)
-        result_tensor = torch.from_numpy(warped_img1_rgb.astype(np.float32) / 255.0).unsqueeze(0).to(image1.device)
-        
-        # 9. 匹配可視化
-        matches_vis_w = final_output_w * 2
-        matches_vis_h = final_output_h
-        
-        matches_vis_tensor = torch.zeros((batch, matches_vis_h, matches_vis_w, c), device=image1.device)
-        print(f"Matches Visualization 最終尺寸: {matches_vis_w}x{matches_vis_h}")
-
-        if show_matches:
-            # 繪製可視化 (基於縮放後的圖像)
-            matches_vis = self.draw_matches(img1_np_bgr, img2_np_bgr, kps1, kps2, matches, status)
-            matches_vis_rgb = cv2.cvtColor(matches_vis, cv2.COLOR_BGR2RGB)
-            matches_vis_tensor_temp = torch.from_numpy(matches_vis_rgb.astype(np.float32) / 255.0).unsqueeze(0).to(image1.device)
-            
-            # 將可視化圖像縮放至目標輸出尺寸 (final_output_w*2, final_output_h)
-            vis_samples = matches_vis_tensor_temp.movedim(-1,1)
-            vis_scaled = comfy.utils.common_upscale(vis_samples, matches_vis_w, matches_vis_h, upscale_method, "disabled")
-            matches_vis_tensor = vis_scaled.movedim(1,-1)
-        
-        # 返回 (對齊並變形後的 A 圖, 匹配可視化圖)
-        return (result_tensor, matches_vis_tensor)
-
-
 class ImageMirrorPad:
-# ... (ImageMirrorPad 類別保持不變) ...
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
@@ -776,7 +476,7 @@ class ImageMirrorPad:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "pad"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "custom_node_experiments"
 
     def pad(self, image, n):
         # image: [batch, height, width, channels], float in [0,1]
@@ -816,7 +516,7 @@ class ImageMirrorPad:
                 out[:, j, i, :] = image[:, n_eff - j,  n_eff - i, :]
                 # верх-право
                 out[:, j, n_eff + w + i, :] = image[:, n_eff -j, w - 1 - i, :]
-                # низ-लेво
+                # низ-лево
                 out[:, n_eff + h + j, i, :] = image[:, h - 1 - j, n_eff -i, :]
                 # низ-право
                 out[:, n_eff + h + j, n_eff + w + i, :] = image[:, h - 1 - j, w - 1 - i, :]
@@ -824,7 +524,6 @@ class ImageMirrorPad:
         return (out,)
 
 class ImageCropBorders:
-# ... (ImageCropBorders 類別保持不變) ...
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
@@ -834,7 +533,7 @@ class ImageCropBorders:
     
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "crop"
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "custom_node_experiments"
 
     def crop(self, image, n):
         # image: [batch, height, width, channels]
@@ -852,7 +551,6 @@ class ImageCropBorders:
         return (result,)
         
 class ImageScaleToQwen:
-# ... (ImageScaleToQwen 類別保持不變) ...
     upscale_methods = [ "bilinear", "nearest-exact", "area", "bicubic", "lanczos"]
     crop_methods = ["disabled", "center"]
 
@@ -864,7 +562,7 @@ class ImageScaleToQwen:
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "upscale"
 
-    CATEGORY = "custom_node_experiments" # 保持您的值
+    CATEGORY = "custom_node_experiments"
 
     def upscale(self, image, upscale_method, total_m):
         samples = image.movedim(-1,1)
@@ -878,10 +576,282 @@ class ImageScaleToQwen:
         s = comfy.utils.common_upscale(samples, width, height, upscale_method, "disabled")
         s = s.movedim(1,-1)
         return (s,)
+    
+# --- 文本處理節點 ---
+    
+class TextCommaToWeighted:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "text": ("STRING", {"default": ""}),
+            "weight": ("FLOAT", {"default": 0.4, "min": 0.0, "max": 10.0, "step": 0.01}),
+        }}
+
+    RETURN_TYPES = ("STRING",)
+    FUNCTION = "convert"
+    CATEGORY = "custom_node_experiments"
+
+    def convert(self, text, weight):
+        if text is None:
+            return ("",)
+        parts = [p.strip() for p in str(text).split(",")]
+        parts = [p for p in parts if p]
+        if not parts:
+            return ("",)
+        formatted = ", ".join([f"({p}:{weight})" for p in parts])
+        return (formatted,)
+
+class TextCommaToRandomWeighted:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "text": ("STRING", {"default": ""}),
+            "min_weight": ("FLOAT", {"default": 0.1, "min": 0.0, "max": 10.0, "step": 0.01}),
+            "max_weight": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
+            "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+        }}
+
+    RETURN_TYPES = ("STRING",)
+    FUNCTION = "convert"
+    CATEGORY = "custom_node_experiments"
+
+    def convert(self, text, min_weight, max_weight, seed):
+        if text is None:
+            return ("",)
+        random.seed(seed)
+        parts = [p.strip() for p in str(text).split(",")]
+        parts = [p for p in parts if p]
+        if not parts:
+            return ("",)
+        formatted = ", ".join([f"({p}:{random.uniform(min_weight, max_weight):.2f})" for p in parts])
+        return (formatted,)
+
+# --- 核心圖像拼接節點 (ImageStitcher) ---
+
+class ImageStitcher:
+    upscale_methods = ["bilinear", "nearest-exact", "area", "bicubic", "lanczos"] 
+    
+    output_size_modes = [
+        "Use_Reference/Image1_Size",
+        "Use_Custom_Size",
+    ]
+    
+    output_transformation_modes = [
+        "KeepProportion_Fill",     
+        "KeepProportion_Crop",    
+        "Stretch_to_Fit",         
+    ]
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "image1": ("IMAGE",),
+            "reference": ("IMAGE",),
+            "feature_detection_size_mode": (["image1", "reference"], {"default": "image1"}), 
+            "upscale_method": (s.upscale_methods,),
+            "ratio": ("FLOAT", {"default": 0.75, "min": 0.1, "max": 1.0, "step": 0.01}),
+            "reproj_thresh": ("FLOAT", {"default": 4.0, "min": 1.0, "max": 20.0, "step": 0.1}),
+            "show_matches": ("BOOLEAN", {"default": False}),
+            
+            # --- 尺寸決定控制 ---
+            "output_size_mode": (s.output_size_modes, {"default": "Use_Reference/Image1_Size"}), 
+            "output_based_on": (["reference", "image1"], {"default": "reference"}), # 僅在 Use_Reference/Image1_Size 模式下生效
+            "custom_width": ("INT", {"default": 512, "min": 16, "max": 4096, "step": 16}),
+            "custom_height": ("INT", {"default": 512, "min": 16, "max": 4096, "step": 16}),
+
+            # --- 變形與邊界控制 ---
+            "output_transformation_mode": (s.output_transformation_modes, {"default": "KeepProportion_Fill"}), 
+            "pad": ("INT", {"default": 0, "min": 0, "max": 1024, "step": 1}),
+        }}
+    
+    RETURN_TYPES = ("IMAGE", "IMAGE")
+    RETURN_NAMES = ("stitched_image", "matches_visualization")
+    FUNCTION = "stitch"
+    CATEGORY = "custom_node_experiments"
+
+    def detect_and_describe(self, image):
+        """Обнаруживает ключевые точки и извлекает дескрипторы SIFT"""
+        if len(image.shape) == 3:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = image
+        
+        descriptor = cv2.SIFT_create()
+        (kps, features) = descriptor.detectAndCompute(gray, None)
+        
+        kps = np.float32([kp.pt for kp in kps])
+        return (kps, features)
+
+    def match_keypoints(self, kpsA, kpsB, featuresA, featuresB, ratio, reproj_thresh):
+        """Сопоставляет ключевые точки между изображениями"""
+        matcher = cv2.DescriptorMatcher_create("BruteForce")
+        raw_matches = matcher.knnMatch(featuresA, featuresB, 2)
+        
+        matches = []
+        for m in raw_matches:
+            if len(m) == 2 and m[0].distance < m[1].distance * ratio:
+                matches.append((m[0].trainIdx, m[0].queryIdx))
+        
+        if len(matches) > 4:
+            ptsA = np.float32([kpsA[i] for (_, i) in matches])
+            ptsB = np.float32([kpsB[i] for (i, _) in matches])
+            (H, status) = cv2.findHomography(ptsA, ptsB, cv2.RANSAC, reproj_thresh)
+            return (matches, H, status)
+        
+        return None
+
+    def draw_matches(self, imageA, imageB, kpsA, kpsB, matches, status):
+        """Создает визуализацию совпадений"""
+        (hA, wA) = imageA.shape[:2]
+        (hB, wB) = imageB.shape[:2]
+        
+        vis = np.zeros((max(hA, hB), wA + wB, 3), dtype=np.uint8)
+        vis[0:hA, 0:wA] = imageA
+        vis[0:hB, wA:] = imageB
+        
+        for ((trainIdx, queryIdx), s) in zip(matches, status):
+            if s == 1:
+                ptA = (int(kpsA[queryIdx][0]), int(kpsA[queryIdx][1]))
+                ptB = (int(kpsB[trainIdx][0]) + wA, int(kpsB[trainIdx][1]))
+                cv2.line(vis, ptA, ptB, (0, 255, 0), 1)
+        
+        return vis
+
+    def stitch(self, image1, reference, feature_detection_size_mode, upscale_method, ratio, reproj_thresh, show_matches, output_size_mode, output_based_on, custom_width, custom_height, output_transformation_mode, pad):
+        """主要圖像對齊函數，已增加自訂尺寸控制並修正了 H 矩陣校準"""
+        
+        # 0. 確定原始尺寸和特徵檢測尺寸 
+        original_h1, original_w1 = image1.shape[1:3]
+        original_h2, original_w2 = reference.shape[1:3]
+        batch, _, _, c = image1.shape
+
+        if feature_detection_size_mode == "image1":
+            detect_w, detect_h = original_w1, original_h1
+        else: # "reference"
+            detect_w, detect_h = original_w2, original_h2
+        
+        # 確保特徵檢測尺寸有效
+        if detect_w <= 0 or detect_h <= 0:
+             print("特徵檢測尺寸為零或負值。")
+             return (image1, torch.zeros_like(image1))
+        
+        print(f"特徵檢測尺寸模式: {feature_detection_size_mode}. 統一尺寸: {detect_w}x{detect_h}")
+        
+        # 0.1 執行縮放 (兩張圖都縮放到統一尺寸進行特徵檢測)
+        
+        samples1 = image1.movedim(-1,1)
+        scaled_samples1 = comfy.utils.common_upscale(samples1, detect_w, detect_h, upscale_method, "disabled")
+        scaled_image1 = scaled_samples1.movedim(1,-1)
+        
+        samples2 = reference.movedim(-1,1)
+        scaled_samples2 = comfy.utils.common_upscale(samples2, detect_w, detect_h, upscale_method, "disabled")
+        scaled_image2 = scaled_samples2.movedim(1,-1)
+
+        w1, h1 = detect_w, detect_h # scaled width/height of image1
+        w2, h2 = detect_w, detect_h # scaled width/height of reference
+
+        # 1. 準備縮放後的圖像 (Tensor -> NumPy Array, RGB -> BGR)
+        img1_np = (scaled_image1[0].cpu().numpy() * 255).astype(np.uint8)
+        img2_np = (scaled_image2[0].cpu().numpy() * 255).astype(np.uint8)
+        
+        img1_np_bgr = cv2.cvtColor(img1_np, cv2.COLOR_RGB2BGR)
+        img2_np_bgr = cv2.cvtColor(img2_np, cv2.COLOR_RGB2BGR)
+        
+        # 2. 檢測和匹配關鍵點 (在縮放後的圖像上操作)
+        (kps1, features1) = self.detect_and_describe(img1_np_bgr)
+        (kps2, features2) = self.detect_and_describe(img2_np_bgr)
+        
+        M = self.match_keypoints(kps1, kps2, features1, features2, ratio, reproj_thresh)
+        
+        # 3. 確定最終輸出尺寸 (stitched_image)
+        if output_size_mode == "Use_Custom_Size":
+            target_w, target_h = custom_width, custom_height
+            target_w = max(16, target_w)
+            target_h = max(16, target_h)
+            print(f"輸出尺寸模式: Custom Size. 目標尺寸: {target_w}x{target_h}")
+        else: # Use_Reference/Image1_Size
+            if output_based_on == "image1":
+                target_w, target_h = original_w1, original_h1
+            else: # reference
+                target_w, target_h = original_w2, original_h2
+            print(f"輸出尺寸模式: {output_based_on} Size. 目標尺寸: {target_w}x{target_h}")
+            
+        final_output_w = target_w + 2 * pad
+        final_output_h = target_h + 2 * pad
+
+        # 4. 處理匹配失敗的狀況
+        if M is None:
+            print("無法找到足夠的匹配點來計算變換矩陣。返回原始 image1 作為 fallback。")
+            
+            print(f"Fallback: 將 Image1 縮放至 {final_output_w}x{final_output_h} 作為輸出。")
+            fallback_samples = image1.movedim(-1, 1)
+            fallback_scaled = comfy.utils.common_upscale(fallback_samples, final_output_w, final_output_h, upscale_method, "disabled")
+            fallback_image = fallback_scaled.movedim(1, -1)
+            
+            matches_vis_tensor = torch.zeros((batch, final_output_h, final_output_w * 2, c), device=image1.device)
+            return (fallback_image, matches_vis_tensor)
+        
+        (matches, H, status) = M
+        
+        # 5. 校準變形矩陣 H (從 scaled 空間轉換到 original 空間)
+        
+        # 矩陣 R_A: 將 Original Image 1 座標轉換到 Scaled Image 1 座標 (特徵檢測空間)
+        scale_x_A = w1 / original_w1 
+        scale_y_A = h1 / original_h1
+        R_A = np.array([[scale_x_A, 0, 0], [0, scale_y_A, 0], [0, 0, 1.0]], dtype=np.float32)
+        
+        # 矩陣 R_B: 將 Scaled Reference 座標轉換到 Target Size 座標 (最終輸出空間)
+        scale_x_B = target_w / w2
+        scale_y_B = target_h / h2
+        R_B = np.array([[scale_x_B, 0, 0], [0, scale_y_B, 0], [0, 0, 1.0]], dtype=np.float32) 
+        
+        # H_base 最終矩陣: Original Image 1 -> Target Size (R_B @ H @ R_A)
+        H_base = R_B @ H @ R_A
+        
+        print(f"H 矩陣校準完成。scale_A=({scale_x_A:.4f}, {scale_y_A:.4f}), scale_B=({scale_x_B:.4f}, {scale_y_B:.4f})")
+        
+        # 6. 【核心變形邏輯】根據 output_transformation_mode 調整 H 矩陣
+        
+        H_final = H_base.copy()
+        
+        # --- 處理 Pad (平移) ---
+        if pad > 0:
+             H_final[0, 2] += pad 
+             H_final[1, 2] += pad
+             print(f"矩陣 H_final 已調整 {pad} 像素以適應填充。")
+
+        # 7. 執行透視變換 (使用 原始 Image1 和 校準後的矩陣 H_final)
+        original_img1_np = (image1[0].cpu().numpy() * 255).astype(np.uint8)
+        original_img1_np_bgr = cv2.cvtColor(original_img1_np, cv2.COLOR_RGB2BGR)
+
+        # 變形輸出到最終尺寸 (含 Pad)
+        warped_img1_bgr = cv2.warpPerspective(original_img1_np_bgr, H_final, (final_output_w, final_output_h))
+        
+        # 8. 圖像處理和轉換
+        
+        warped_img1_rgb = cv2.cvtColor(warped_img1_bgr, cv2.COLOR_BGR2RGB)
+        result_tensor = torch.from_numpy(warped_img1_rgb.astype(np.float32) / 255.0).unsqueeze(0).to(image1.device)
+        
+        # 9. 匹配可視化
+        matches_vis_w = final_output_w * 2
+        matches_vis_h = final_output_h
+        
+        matches_vis_tensor = torch.zeros((batch, matches_vis_h, matches_vis_w, c), device=image1.device)
+        print(f"Matches Visualization 最終尺寸: {matches_vis_w}x{matches_vis_h}")
+
+        if show_matches:
+            matches_vis = self.draw_matches(img1_np_bgr, img2_np_bgr, kps1, kps2, matches, status)
+            matches_vis_rgb = cv2.cvtColor(matches_vis, cv2.COLOR_BGR2RGB)
+            matches_vis_tensor_temp = torch.from_numpy(matches_vis_rgb.astype(np.float32) / 255.0).unsqueeze(0).to(image1.device)
+            
+            vis_samples = matches_vis_tensor_temp.movedim(-1,1)
+            vis_scaled = comfy.utils.common_upscale(vis_samples, matches_vis_w, matches_vis_h, upscale_method, "disabled")
+            matches_vis_tensor = vis_scaled.movedim(1,-1)
+        
+        return (result_tensor, matches_vis_tensor)
 
 
 # --- 節點映射 (NODE MAPPINGS) ---
-# ComfyUI 必須有這兩個字典才能識別您的節點
 
 NODE_CLASS_MAPPINGS = {
     "ImageScaleToTotalPixelsRound64": ImageScaleToTotalPixelsRound64,
@@ -901,7 +871,7 @@ NODE_CLASS_MAPPINGS = {
     "ImageScaleToQwen":ImageScaleToQwen,
 }
 
-# (可選) 節點顯示名稱映射，讓 ComfyUI 選單中的名稱更友善
+# 節點顯示名稱映射
 NODE_DISPLAY_NAME_MAPPINGS = {
     "ImageScaleToTotalPixelsRound64": "圖像縮放 (64x 總像素)",
     "ImageBlendLighter": "圖像疊加 (Lighter)",
